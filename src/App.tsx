@@ -13,9 +13,21 @@ import WhatsAppConfigModal from "./components/whatsAppConfigModal/WhatsAppConfig
 export const App: React.FC = () => {
   // Obtener locationId de la URL
   const params = new URLSearchParams(window.location.search);
-  const locationId = params.get("locationId") || "XCrKRkp9vLhW6P6tXIkK";
-  // Guardar locationId en localStorage
-  localStorage.setItem("locationId", locationId);
+  const locationId = params.get("locationId");
+
+  // Guardar locationId en localStorage si existe en la URL
+  useEffect(() => {
+    if (locationId) {
+      localStorage.setItem("locationId", locationId);
+      console.log("[App] locationId found in URL, saved to localStorage:", locationId);
+    } else {
+      console.log("[App] No locationId found in URL.");
+    }
+  }, [locationId]); // Depend on locationId from URL
+
+  // Leer locationId de localStorage para usarlo en esta página
+  const storedLocationId = localStorage.getItem("locationId");
+  const currentLocationId = locationId || storedLocationId; // Use URL param if present, else use stored
 
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -46,7 +58,7 @@ export const App: React.FC = () => {
     setShowTermsModal(false);
     toast.success("Términos y condiciones aceptados");
   };
-  
+
   const getNextInstanceNumber = useCallback(() => {
     if (instances.length === 0) return 1;
 
@@ -59,14 +71,14 @@ export const App: React.FC = () => {
   }, [instances]);
 
   const loadInstances = useCallback(async () => {
-    if (!locationId) {
+    if (!currentLocationId) { // Use currentLocationId here
       setError("No se proporcionó un ID de ubicación válido");
       setLoading(false);
       return;
     }
 
     try {
-      const instancesList = await api.listInstances(locationId);
+      const instancesList = await api.listInstances(currentLocationId); // Use currentLocationId here
       setInstances(instancesList);
       setError(null);
     } catch (error) {
@@ -76,17 +88,17 @@ export const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [locationId]);
+  }, [currentLocationId]); // Depend on currentLocationId
 
   const loadUsers = useCallback(async () => {
-    if (!locationId) {
+    if (!currentLocationId) { // Use currentLocationId here
       setError("No se proporcionó un ID de ubicación válido");
       return;
     }
 
     setLoadingUsers(true);
     try {
-      const usersList = await api.getUsers(locationId);
+      const usersList = await api.getUsers(currentLocationId); // Use currentLocationId here
       setUsers(usersList);
     } catch (error) {
       console.error("Error loading users:", error);
@@ -95,11 +107,11 @@ export const App: React.FC = () => {
     } finally {
       setLoadingUsers(false);
     }
-  }, [locationId]);
+  }, [currentLocationId]); // Depend on currentLocationId
 
   useEffect(() => {
     const init = async () => {
-      if (!locationId) {
+      if (!currentLocationId) { // Use currentLocationId here
         setError("No se proporcionó un ID de ubicación válido");
         setLoading(false);
         return;
@@ -116,10 +128,10 @@ export const App: React.FC = () => {
       }
     };
     init();
-  }, [loadInstances, loadUsers, locationId]);
+  }, [loadInstances, loadUsers, currentLocationId]); // Depend on currentLocationId
 
   const handleOpenModal = useCallback(async () => {
-    if (!locationId) {
+    if (!currentLocationId) { // Use currentLocationId here
       toast.error("No se proporcionó un ID de ubicación válido");
       return;
     }
@@ -143,11 +155,11 @@ export const App: React.FC = () => {
       setLoadingUsers(false);
       setIsLoading(false);
     }
-  }, [instances.length, loadUsers, locationId]);
+  }, [instances.length, loadUsers, currentLocationId]); // Depend on currentLocationId
 
   const handleEditConfig = useCallback(
     async (instance: WhatsAppInstance) => {
-      if (!locationId) {
+      if (!currentLocationId) { // Use currentLocationId here
         toast.error("No se proporcionó un ID de ubicación válido");
         return;
       }
@@ -156,7 +168,7 @@ export const App: React.FC = () => {
       setLoadingUsers(true);
       try {
         const instanceConfig = await api.getInstanceConfig(
-          locationId,
+          currentLocationId, // Use currentLocationId here
           instance.instance_id.toString()
         );
         await loadUsers();
@@ -171,12 +183,12 @@ export const App: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [loadUsers, locationId]
+    [loadUsers, currentLocationId] // Depend on currentLocationId
   );
 
   const handleSaveConfig = useCallback(
     async (config: InstanceConfig, userData?: User) => {
-      if (!locationId) {
+      if (!currentLocationId) { // Use currentLocationId here
         toast.error("No se proporcionó un ID de ubicación válido");
         return;
       }
@@ -185,7 +197,7 @@ export const App: React.FC = () => {
         setIsSaving(true);
         try {
           await api.editInstance(
-            locationId,
+            currentLocationId, // Use currentLocationId here
             configInstance.instance_name,
             config
           );
@@ -214,7 +226,7 @@ export const App: React.FC = () => {
             : undefined;
 
           await api.createInstance(
-            locationId,
+            currentLocationId, // Use currentLocationId here
             {
               ...config,
               instance_name: instanceName,
@@ -235,7 +247,7 @@ export const App: React.FC = () => {
     [
       isEditing,
       configInstance,
-      locationId,
+      currentLocationId, // Depend on currentLocationId
       loadInstances,
       getNextInstanceNumber,
     ]
@@ -249,7 +261,8 @@ export const App: React.FC = () => {
     loadInstances();
   }, [loadInstances]);
 
-  if (!locationId) {
+  // Check currentLocationId for rendering the error message
+  if (!currentLocationId) {
     return (
       <div className="min-h-screen bg-purple-50 flex items-center justify-center">
         <div className="text-red-600">
@@ -341,9 +354,11 @@ export const App: React.FC = () => {
                         instance={instance}
                         onViewInstance={() => {
                           // Navegación a la página de detalles
+                          // No necesitamos pasar locationId en la URL aquí,
+                          // ya que la página de detalles lo leerá de localStorage
                           window.location.href = `/instance/${instance.instance_name}`;
                         }}
-                        locationId={locationId}
+                        locationId={currentLocationId} // Pass currentLocationId to card if needed
                         onInstanceDeleted={handleInstanceDeleted}
                         onInstanceUpdated={handleInstanceUpdated}
                         onEditConfig={handleEditConfig}

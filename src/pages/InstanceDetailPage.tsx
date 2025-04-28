@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom"; // Removed useLocation
 import { toast } from "react-hot-toast";
 import {
   ArrowLeft,
@@ -70,13 +70,32 @@ const InstanceDetailPage: React.FC = () => {
   const [isLoadingOfficialAssistants, setIsLoadingOfficialAssistants] = useState(true); // Loading for the filtered list
   const [selectedOfficialApiKeyId, setSelectedOfficialApiKeyId] = useState<string>(""); // Currently selected filter key
 
-  // Retrieve locationId from localStorage
-  const locationId = localStorage.getItem("locationId") || "defaultLocationId"; // Retrieve locationId
+  // --- Retrieve locationId ONLY from localStorage ---
+  const locationId = localStorage.getItem("locationId");
+
+  // Log the value read from localStorage
+  useEffect(() => {
+    console.log("[InstanceDetail] Reading locationId from localStorage:", locationId);
+    if (!locationId) {
+        console.error("[InstanceDetail] locationId is null or undefined from localStorage.");
+    }
+  }, [locationId]); // Log whenever locationId changes (should be once on mount)
+
 
   // --- Data Fetching ---
 
   const fetchData = useCallback(async () => {
-    if (!instanceName) return;
+    // Check if locationId is available BEFORE fetching
+    if (!instanceName || !locationId) {
+      console.error("[InstanceDetail] Cannot fetch data: instanceName or locationId missing.", { instanceName, locationId });
+      setIsLoading(false);
+      setIsLoadingCredentials(false);
+      setIsLoadingCustomAssistants(false);
+      setIsLoadingOfficialAssistants(false);
+      // The render logic below will show the "No se proporcionó..." message
+      return;
+    }
+
     setIsLoading(true);
     setIsLoadingCredentials(true);
     setIsLoadingCustomAssistants(true);
@@ -94,15 +113,37 @@ const InstanceDetailPage: React.FC = () => {
         setInstanceData(instanceRes.value);
         // Attempt to find matching instance from list if needed (e.g., for alias)
         // This might be redundant if getInstanceData returns all needed info
-        const instancesList = await api.listInstances(locationId);
-        const foundInstance = instancesList.find(
-          (inst) => inst.instance_name === instanceName
-        );
-        setInstance(foundInstance || null);
+        // Only fetch instances list if instance data didn't provide enough info or failed
+        if (!instanceRes.value || !instanceRes.value.instance_alias) {
+             try {
+                const instancesList = await api.listInstances(locationId);
+                const foundInstance = instancesList.find(
+                  (inst) => inst.instance_name === instanceName
+                );
+                setInstance(foundInstance || null);
+             } catch (listError) {
+                console.error("Error fetching instances list for alias:", listError);
+                setInstance(null); // Ensure instance is null on error
+             }
+        } else {
+            // If instanceData has alias, use it
+            setInstance({
+                ...instanceRes.value, // Spread existing data
+                instance_alias: instanceRes.value.instance_alias, // Ensure alias is set
+                instance_id: instanceRes.value.instance_id, // Ensure ID is set
+                main_device: instanceRes.value.main_device, // Ensure main_device is set
+                fb_ads: instanceRes.value.fb_ads, // Ensure fb_ads is set
+                n8n_webhook: instanceRes.value.n8n_webhook, // Ensure n8n_webhook is set
+                active_ia: instanceRes.value.active_ia, // Ensure active_ia is set
+                userId: instanceRes.value.user_id // Ensure userId is set
+            });
+        }
+
       } else {
         console.error("Error fetching instance data:", instanceRes.reason);
         toast.error("Error al cargar los datos de la instancia.");
         setInstanceData({ state: "error" }); // Indicate error state
+        setInstance(null); // Ensure instance is null on error
       }
 
       if (credsRes.status === "fulfilled") {
@@ -140,6 +181,7 @@ const InstanceDetailPage: React.FC = () => {
       toast.error("Error general al cargar datos.");
       // Ensure loading states are false on general error
       setInstanceData({ state: "error" });
+      setInstance(null);
       setApiKeys([]);
       setCustomAssistants([]);
       setOfficialAssistants([]);
@@ -150,16 +192,16 @@ const InstanceDetailPage: React.FC = () => {
       setIsLoadingCustomAssistants(false); // Custom assistant specific loading
       // Official assistant loading is handled by the useEffect hook below
     }
-  }, [instanceName, locationId, selectedOfficialApiKeyId]); // Added selectedOfficialApiKeyId dependency
+  }, [instanceName, locationId, selectedOfficialApiKeyId]); // Added locationId dependency
 
   // Effect to fetch Official Assistants when the selected API key changes
   useEffect(() => {
     const fetchOfficialAssistantsForKey = async () => {
-      if (!instanceName || !selectedOfficialApiKeyId) {
+      if (!instanceName || !selectedOfficialApiKeyId || !locationId) { // Also check locationId
          // If no key is selected (e.g., no keys exist), don't fetch
          setOfficialAssistants([]);
          setIsLoadingOfficialAssistants(false);
-         console.log("[InstanceDetail] No API key selected, skipping official assistant fetch.");
+         console.log("[InstanceDetail] Skipping official assistant fetch: Missing instanceName, selectedOfficialApiKeyId, or locationId.");
          return;
       }
 
@@ -178,26 +220,48 @@ const InstanceDetailPage: React.FC = () => {
       }
     };
 
-    fetchOfficialAssistantsForKey();
-  }, [instanceName, selectedOfficialApiKeyId]); // Depend on instanceName and the selected key ID
+    // Only fetch if locationId is available
+    if (locationId) {
+      fetchOfficialAssistantsForKey();
+    } else {
+       // If locationId is missing, ensure official assistants list is empty and not loading
+       setOfficialAssistants([]);
+       setIsLoadingOfficialAssistants(false);
+    }
+  }, [instanceName, selectedOfficialApiKeyId, locationId]); // Depend on instanceName, the selected key ID, and locationId
 
   // Initial data fetch on component mount
   useEffect(() => {
-    fetchData();
-  }, [fetchData]); // Use the memoized fetchData
+    // Only fetch data if locationId is available
+    if (locationId) {
+      fetchData();
+    } else {
+       // If locationId is not available initially, stop loading and show error message
+       setIsLoading(false);
+       setIsLoadingCredentials(false);
+       setIsLoadingCustomAssistants(false);
+       setIsLoadingOfficialAssistants(false);
+       // The render logic below will show the "No se proporcionó..." message
+    }
+  }, [fetchData, locationId]); // Depend on fetchData and locationId
+
 
   // Fetch users (can be done separately or as part of initial load if needed)
   useEffect(() => {
-    api
-      .getUsers(locationId) // Use locationId here
-      .then(setUsers)
-      .catch((err) => console.error("Error fetching users:", err));
+    if (locationId) { // Only fetch users if locationId is available
+      api
+        .getUsers(locationId) // Use locationId here
+        .then(setUsers)
+        .catch((err) => console.error("Error fetching users:", err));
+    } else {
+       setUsers([]); // Clear users if locationId is missing
+    }
   }, [locationId]); // Depend on locationId
 
   // --- Action Handlers ---
 
   const handleRefreshQR = async () => {
-    if (!instanceName) return;
+    if (!instanceName || !locationId) return; // Check locationId
     setIsRefreshingQR(true);
     try {
       const data = await api.refreshQRCode(locationId, instanceName); // Use locationId here
@@ -226,7 +290,7 @@ const InstanceDetailPage: React.FC = () => {
   };
 
   const handleDeleteInstance = async () => {
-    if (!instanceName) return;
+    if (!instanceName || !locationId) return; // Check locationId
     setIsDeleting(true);
     try {
       await api.deleteInstance(locationId, instanceName); // Use locationId here
@@ -242,7 +306,7 @@ const InstanceDetailPage: React.FC = () => {
   };
 
   const handleTurnOffInstance = async () => {
-    if (!instanceName) return;
+    if (!instanceName || !locationId) return; // Check locationId
     setIsTurningOff(true);
     try {
       await api.turnOffInstance(locationId, instanceName); // Use locationId here
@@ -257,7 +321,7 @@ const InstanceDetailPage: React.FC = () => {
   };
 
   const handleSaveConfig = async (config: any) => {
-    if (!instanceName) return false;
+    if (!instanceName || !locationId) return false; // Check locationId
     try {
       await api.editInstance(locationId, instanceName, config); // Use locationId here
       // Update local state optimistically or refetch
@@ -534,10 +598,22 @@ const InstanceDetailPage: React.FC = () => {
 
   const apiKeyOptions = apiKeys.map(key => ({ id: key.id, name: key.name }));
 
+  // Show error message if locationId is missing
+  if (!locationId) {
+    return (
+      <div className="min-h-screen bg-purple-50 flex items-center justify-center">
+        <div className="text-red-600">
+          No se proporcionó un ID de ubicación válido
+        </div>
+      </div>
+    );
+  }
+
+  // Show full page loader only during the very initial load when locationId IS available
   if (isLoading && !instanceData) {
-    // Show a full page loader only during the very initial load
     return <LoadingOverlay text="Cargando detalles de la instancia..." />;
   }
+
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
