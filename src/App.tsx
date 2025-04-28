@@ -13,7 +13,8 @@ import WhatsAppConfigModal from "./components/whatsAppConfigModal/WhatsAppConfig
 export const App: React.FC = () => {
   // Obtener locationId de la URL
   const params = new URLSearchParams(window.location.search);
-  const locationId = params.get("locationId");
+  const locationId = params.get("locationId") || "XCrKRkp9vLhW6P6tXIkK";
+  // Guardar locationId en localStorage
   localStorage.setItem("locationId", locationId);
 
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
@@ -154,11 +155,11 @@ export const App: React.FC = () => {
 
       setLoadingUsers(true);
       try {
-        await loadUsers();
         const instanceConfig = await api.getInstanceConfig(
           locationId,
           instance.instance_id.toString()
         );
+        await loadUsers();
         setIsEditing(true);
         setConfigInstance(instanceConfig);
         setIsModalOpen(true);
@@ -300,12 +301,12 @@ export const App: React.FC = () => {
 
       <div className="max-w-7xl mx-auto">
         <Routes>
-          <Route 
-            path="/instance/:instanceName" 
-            element={<InstanceDetailPage />} 
+          <Route
+            path="/instance/:instanceName"
+            element={<InstanceDetailPage />}
           />
-          <Route 
-            path="/" 
+          <Route
+            path="/"
             element={
               <>
                 <div className="flex justify-between items-center mb-8">
@@ -339,6 +340,7 @@ export const App: React.FC = () => {
                         key={instance.instance_id}
                         instance={instance}
                         onViewInstance={() => {
+                          // Navegación a la página de detalles
                           window.location.href = `/instance/${instance.instance_name}`;
                         }}
                         locationId={locationId}
@@ -372,7 +374,7 @@ export const App: React.FC = () => {
                   isEditing={isEditing}
                 />
               </>
-            } 
+            }
           />
         </Routes>
       </div>

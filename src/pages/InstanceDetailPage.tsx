@@ -64,12 +64,13 @@ const InstanceDetailPage: React.FC = () => {
   const [isLoadingCredentials, setIsLoadingCredentials] = useState(true);
   const [customAssistants, setCustomAssistants] = useState<OpenAIAssistant[]>([]); // State for Custom Assistants
   const [isLoadingCustomAssistants, setIsLoadingCustomAssistants] = useState(true); // Loading for Custom Assistants
-  
+
   // State specifically for Official Assistants and their API-driven filtering
   const [officialAssistants, setOfficialAssistants] = useState<OpenAIOfficialAssistant[]>([]); // Holds the list fetched based on filter
   const [isLoadingOfficialAssistants, setIsLoadingOfficialAssistants] = useState(true); // Loading for the filtered list
   const [selectedOfficialApiKeyId, setSelectedOfficialApiKeyId] = useState<string>(""); // Currently selected filter key
 
+  // Retrieve locationId from localStorage
   const locationId = localStorage.getItem("locationId") || "defaultLocationId"; // Retrieve locationId
 
   // --- Data Fetching ---
@@ -111,7 +112,7 @@ const InstanceDetailPage: React.FC = () => {
         // If keys exist and no filter is selected yet, select the first one
         if (keys.length > 0 && !selectedOfficialApiKeyId) {
           console.log("[InstanceDetail] Setting initial API key filter:", keys[0].id);
-          setSelectedOfficialApiKeyId(keys[0].id); 
+          setSelectedOfficialApiKeyId(keys[0].id);
           // The useEffect below will trigger the fetch for official assistants
         } else if (keys.length === 0) {
            // If no keys, ensure official assistants list is empty and not loading
@@ -125,7 +126,7 @@ const InstanceDetailPage: React.FC = () => {
         setOfficialAssistants([]); // Ensure official assistants list is empty
         setIsLoadingOfficialAssistants(false); // Stop loading if creds fail
       }
-      
+
       if (customAssistantsRes.status === "fulfilled") {
         setCustomAssistants(customAssistantsRes.value);
       } else {
@@ -188,10 +189,10 @@ const InstanceDetailPage: React.FC = () => {
   // Fetch users (can be done separately or as part of initial load if needed)
   useEffect(() => {
     api
-      .getUsers(locationId)
+      .getUsers(locationId) // Use locationId here
       .then(setUsers)
       .catch((err) => console.error("Error fetching users:", err));
-  }, [locationId]);
+  }, [locationId]); // Depend on locationId
 
   // --- Action Handlers ---
 
@@ -199,7 +200,7 @@ const InstanceDetailPage: React.FC = () => {
     if (!instanceName) return;
     setIsRefreshingQR(true);
     try {
-      const data = await api.refreshQRCode(locationId, instanceName);
+      const data = await api.refreshQRCode(locationId, instanceName); // Use locationId here
       if (data && data.qrcode) {
         setInstanceData((prev: any) => ({ ...prev, qrcode: data.qrcode, state: 'connecting' })); // Assume connecting state
         setIsQRModalOpen(true); // Open modal with new QR
@@ -228,7 +229,7 @@ const InstanceDetailPage: React.FC = () => {
     if (!instanceName) return;
     setIsDeleting(true);
     try {
-      await api.deleteInstance(locationId, instanceName);
+      await api.deleteInstance(locationId, instanceName); // Use locationId here
       toast.success("Instancia eliminada correctamente.");
       navigate("/"); // Redirect to home after deletion
     } catch (error) {
@@ -244,7 +245,7 @@ const InstanceDetailPage: React.FC = () => {
     if (!instanceName) return;
     setIsTurningOff(true);
     try {
-      await api.turnOffInstance(locationId, instanceName);
+      await api.turnOffInstance(locationId, instanceName); // Use locationId here
       setInstanceData((prev: any) => ({ ...prev, state: "close" })); // Update state locally
       toast.success("Instancia desconectada.");
     } catch (error) {
@@ -258,7 +259,7 @@ const InstanceDetailPage: React.FC = () => {
   const handleSaveConfig = async (config: any) => {
     if (!instanceName) return false;
     try {
-      await api.editInstance(locationId, instanceName, config);
+      await api.editInstance(locationId, instanceName, config); // Use locationId here
       // Update local state optimistically or refetch
       setInstance((prev) => prev ? { ...prev, ...config } : null);
       toast.success("Configuración actualizada.");
@@ -482,7 +483,7 @@ const InstanceDetailPage: React.FC = () => {
       // Refetch official assistants for the currently selected key
       if (selectedOfficialApiKeyId) {
         setIsLoadingOfficialAssistants(true);
-        const updatedAssistants = await api.getOpenAIOfficialAssistants(instanceName, selectedOfficialApiKeyId);
+        const updatedAssistants = await api.getOpenAIAssistants(instanceName, selectedOfficialApiKeyId);
         setOfficialAssistants(updatedAssistants);
         setIsLoadingOfficialAssistants(false);
       }
