@@ -63,6 +63,10 @@ const AssistantSessionsModal: React.FC<AssistantSessionsModalProps> = ({
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
+    // Check if the date is valid before formatting
+    if (isNaN(date.getTime())) {
+      return 'Fecha inválida';
+    }
     return new Intl.DateTimeFormat('es', {
       day: '2-digit',
       month: '2-digit',
@@ -100,6 +104,9 @@ const AssistantSessionsModal: React.FC<AssistantSessionsModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Filter out sessions that are effectively empty (no pushName and no remoteJid)
+  const meaningfulSessions = sessions.filter(session => session.pushName || session.remoteJid);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -120,7 +127,7 @@ const AssistantSessionsModal: React.FC<AssistantSessionsModalProps> = ({
             <Loader2 className="w-12 h-12 text-purple-500 animate-spin mb-4" />
             <p className="text-gray-600 text-center">Cargando sesiones...</p>
           </div>
-        ) : sessions.length === 0 ? (
+        ) : meaningfulSessions.length === 0 ? ( // Check the filtered array length
           <div className="text-center py-8">
             <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500">No hay sesiones activas para este asistente</p>
@@ -148,7 +155,7 @@ const AssistantSessionsModal: React.FC<AssistantSessionsModalProps> = ({
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {sessions.map((session) => (
+                {meaningfulSessions.map((session) => ( // Map over the filtered array
                   <tr key={session.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -156,9 +163,12 @@ const AssistantSessionsModal: React.FC<AssistantSessionsModalProps> = ({
                         <div className="text-sm font-medium text-gray-900">
                           {session.pushName || 'Usuario sin nombre'}
                         </div>
-                        <div className="ml-2 text-xs text-gray-500 font-mono">
-                          {session.remoteJid.split('@')[0]}
-                        </div>
+                        {/* Only show remoteJid if it exists */}
+                        {session.remoteJid && (
+                          <div className="ml-2 text-xs text-gray-500 font-mono">
+                            {session.remoteJid.split('@')[0]}
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -169,13 +179,13 @@ const AssistantSessionsModal: React.FC<AssistantSessionsModalProps> = ({
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center">
                         <Clock className="flex-shrink-0 h-4 w-4 text-gray-400 mr-1" />
-                        {formatDate(session.createdAt)}
+                        {session.createdAt ? formatDate(session.createdAt) : 'Fecha no disponible'} {/* Use more friendly text */}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center">
                         <Clock className="flex-shrink-0 h-4 w-4 text-gray-400 mr-1" />
-                        {formatDate(session.updatedAt)}
+                        {session.updatedAt ? formatDate(session.updatedAt) : 'Fecha no disponible'} {/* Use more friendly text */}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">

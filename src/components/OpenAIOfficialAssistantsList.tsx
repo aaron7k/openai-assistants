@@ -1,99 +1,50 @@
 import React, { useState } from "react";
-import { PlusCircle, Bot, Loader2, Trash2, Edit, Key, Cpu, Info, Wrench, FileText, Code, FunctionSquare, Copy } from "lucide-react"; // Added Copy icon
+import { PlusCircle, Bot, Loader2, Trash2, Copy, Edit, Check, Info } from "lucide-react";
+import { toast } from "react-hot-toast";
 import { OpenAIOfficialAssistant, OpenAITool } from "../types"; // Import OpenAITool
-import { DeleteAssistantConfirmationModal } from "./DeleteAssistantConfirmationModal";
-import { toast } from "react-hot-toast"; // Import toast for feedback
-
-interface ApiKeyOption {
-  id: string;
-  name: string;
-}
+import { DeleteAssistantConfirmationModal } from "./DeleteAssistantConfirmationModal"; // Reusing the same modal component
+import { getOpenAIOfficialAssistants } from "../api"; // Import the API function
 
 interface OpenAIOfficialAssistantsListProps {
-  assistants: OpenAIOfficialAssistant[]; // Now receives the already filtered list
+  assistants: OpenAIOfficialAssistant[]; // This prop now receives the filtered list from the parent
   onAddAssistant: () => void;
-  onDeleteAssistant: (id: string, apiKeyId: string) => void; // Updated signature to include apiKeyId
-  onEditAssistant?: (assistant: OpenAIOfficialAssistant) => void;
-  isLoading: boolean; // Represents loading state for the API call triggered by filter change
-  instanceName: string; // Keep instanceName if needed elsewhere
-  apiKeys: ApiKeyOption[]; // List of all available API keys for the dropdown
-  selectedApiKeyFilter: string; // The currently selected API key ID (controlled by parent)
-  onApiKeyFilterChange: (apiKeyId: string) => void; // Handler to notify parent of filter change
+  onDeleteAssistant: (id: string, apiKeyId: string) => void; // Updated signature
+  onEditAssistant: (assistant: OpenAIOfficialAssistant) => void;
+  isLoading: boolean;
+  instanceName: string;
+  apiKeys: { id: string; name: string }[]; // List of available API keys for the filter
+  selectedApiKeyFilter: string; // The currently selected API key ID for filtering
+  onApiKeyFilterChange: (apiKeyId: string) => void; // Handler for filter change
 }
 
-// Helper function to get display text and icon for a tool
-const getToolDisplay = (tool: OpenAITool): { text: string; icon: React.ReactNode; color: string } => {
-  switch (tool.type) {
-    case 'retrieval':
-      return { text: 'Recuperación', icon: <FileText className="w-3 h-3 mr-1" />, color: 'blue' };
-    case 'code_interpreter':
-      return { text: 'Intérprete Código', icon: <Code className="w-3 h-3 mr-1" />, color: 'purple' };
-    case 'function':
-      // Use function name, fallback to generic 'Función' if name is missing
-      const functionName = tool.function?.name || 'Función';
-      return { text: functionName, icon: <FunctionSquare className="w-3 h-3 mr-1" />, color: 'indigo' };
-    default:
-      return { text: 'Herramienta Desconocida', icon: <Wrench className="w-3 h-3 mr-1" />, color: 'gray' };
-  }
-};
-
-// Helper function to get Tailwind CSS classes based on color name
-const getChipColorClasses = (color: string): string => {
-  switch (color) {
-    case 'blue': return 'bg-blue-100 text-blue-800';
-    case 'purple': return 'bg-purple-100 text-purple-800';
-    case 'indigo': return 'bg-indigo-100 text-indigo-800';
-    case 'emerald': return 'bg-emerald-100 text-emerald-800'; // For model
-    case 'orange': return 'bg-orange-100 text-orange-800'; // For temperature
-    case 'pink': return 'bg-pink-100 text-pink-800'; // For top_p (changed from purple)
-    case 'gray': return 'bg-gray-100 text-gray-800'; // For API Key
-    default: return 'bg-gray-100 text-gray-800';
-  }
-};
-
-
 const OpenAIOfficialAssistantsList: React.FC<OpenAIOfficialAssistantsListProps> = ({
-  assistants, // This list is now pre-filtered by the parent via API call
+  assistants,
   onAddAssistant,
   onDeleteAssistant,
   onEditAssistant,
   isLoading,
-  // instanceName, // Removed if not used
-  apiKeys = [],
-  selectedApiKeyFilter, // Controlled by parent
-  onApiKeyFilterChange, // Controlled by parent
+  instanceName,
+  apiKeys,
+  selectedApiKeyFilter,
+  onApiKeyFilterChange,
 }) => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [assistantToDelete, setAssistantToDelete] = useState<OpenAIOfficialAssistant | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  // Log props on render for debugging
-  // console.log("[OpenAIOfficialAssistantsList] Rendering with props:", { assistants, isLoading, apiKeys, selectedApiKeyFilter });
-
-  // Function to get API key name from its ID (remains the same)
-  const getApiKeyName = (keyId: string): string => {
-    const key = apiKeys.find(k => k.id === keyId);
-    return key ? key.name : "Clave Desconocida";
-  };
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const handleDeleteClick = (assistant: OpenAIOfficialAssistant) => {
-    // console.log("[OpenAIOfficialAssistantsList] Delete clicked for assistant:", assistant);
     setAssistantToDelete(assistant);
     setDeleteModalOpen(true);
   };
 
   const handleConfirmDelete = async () => {
     if (!assistantToDelete) return;
+    
     setIsDeleting(true);
     try {
-      // console.log("[OpenAIOfficialAssistantsList] Confirming delete for assistant:", assistantToDelete);
-      // console.log("[OpenAIOfficialAssistantsList] Using apiKeyId:", assistantToDelete.apiKeyId);
-
-      // Call parent's delete handler, passing both ID and apiKeyId
+      // Pass both assistant ID and apiKeyId to the parent handler
       await onDeleteAssistant(assistantToDelete.id, assistantToDelete.apiKeyId);
-    } catch (error) {
-       console.error("[OpenAIOfficialAssistantsList] Error during delete confirmation:", error);
-       // Toast likely handled in parent/API layer
     } finally {
       setIsDeleting(false);
       setDeleteModalOpen(false);
@@ -101,232 +52,186 @@ const OpenAIOfficialAssistantsList: React.FC<OpenAIOfficialAssistantsListProps> 
     }
   };
 
-  // Edit click handler remains the same, calls parent's handler
-  const handleEditClick = (assistant: OpenAIOfficialAssistant) => {
-     // console.log("[OpenAIOfficialAssistantsList] Edit clicked for:", assistant);
-     if (onEditAssistant) {
-       onEditAssistant(assistant);
-     } else {
-       console.warn("[OpenAIOfficialAssistantsList] onEditAssistant prop is not provided.");
-     }
+  const handleCancelDelete = () => {
+    setDeleteModalOpen(false);
+    setAssistantToDelete(null);
   };
 
-  // Handle Copy ID Click
-  const handleCopyId = async (id: string) => {
-    try {
-      await navigator.clipboard.writeText(id);
-      toast.success("ID copiado al portapapeles!");
-    } catch (err) {
-      console.error("Failed to copy ID: ", err);
-      toast.error("Error al copiar el ID.");
+  const handleCopyAssistantId = (id: string) => {
+    if (id) {
+      navigator.clipboard.writeText(id);
+      setCopiedId(id);
+      setTimeout(() => {
+        setCopiedId(null);
+      }, 2000);
     }
   };
 
+  // Filter out assistants that are effectively empty (contain placeholder strings or are falsy for key fields)
+  // Keep the assistant if ANY of the key fields (name, id, instructions) are NOT the placeholder/falsy value.
+  const meaningfulAssistants = assistants.filter(assistant => {
+    const isPlaceholderName = !assistant.name || assistant.name === "Sin nombre";
+    const isPlaceholderId = !assistant.id || assistant.id === "Sin ID";
+    const isPlaceholderInstructions = !assistant.instructions || assistant.instructions === "Sin instrucciones";
+    
+    // Keep if NOT all three are placeholders
+    return !(isPlaceholderName && isPlaceholderId && isPlaceholderInstructions);
+  });
 
-  // Determine if the filter dropdown should be shown
-  const showFilter = apiKeys.length > 0;
+  // Function to extract function names from tools
+  const getFunctionNames = (tools: OpenAITool[] | undefined): string[] => {
+    if (!tools) return [];
+    return tools
+      .filter((tool): tool is { type: 'function'; function: { name: string } } => 
+         tool.type === 'function' && typeof (tool as any).function?.name === 'string'
+      )
+      .map(tool => tool.function.name);
+  };
+
 
   return (
-    <div>
-      {/* Header with Filter and Add Button */}
-      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-        {/* Filter Dropdown */}
-        {showFilter ? (
-          <div className="w-full sm:w-auto">
-            <label htmlFor="apiKeyFilter" className="block text-sm font-medium text-gray-700 mb-1">Filtrar por API Key</label>
-            <select
-              id="apiKeyFilter"
-              value={selectedApiKeyFilter} // Bind value to parent's state
-              onChange={(e) => {
-                // console.log("[OpenAIOfficialAssistantsList] Filter changed via dropdown to:", e.target.value);
-                onApiKeyFilterChange(e.target.value); // Call parent's handler on change
-              }}
-              className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white appearance-none text-sm"
-              disabled={apiKeys.length === 0 || isLoading} // Disable if no keys or while loading new list
-            >
-              {/* No default "Select..." option needed if parent ensures a key is always selected */}
-              {apiKeys.map((key) => (
-                <option key={key.id} value={key.id}>
-                  {key.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          // Placeholder or message when no API keys exist
-           <div className="w-full sm:w-auto h-[58px] flex items-center">
-             {/* Adjusted height to roughly match label + select */}
-             {!isLoading && ( // Only show message if not in initial loading state
-               <p className="text-sm text-gray-500 italic">Añada una credencial para empezar.</p>
-             )}
-           </div>
-        )}
+    <div> {/* Removed the outer div with bg-white/shadow as it's in the parent */}
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-2">
+        {/* API Key Filter Dropdown */}
+        <div className="flex items-center w-full sm:w-auto">
+          <label htmlFor="apiKeyFilter" className="text-sm font-medium text-gray-700 mr-2 flex-shrink-0">
+            Filtrar por Credencial:
+          </label>
+          <select
+            id="apiKeyFilter"
+            value={selectedApiKeyFilter}
+            onChange={(e) => onApiKeyFilterChange(e.target.value)}
+            className="mt-1 block w-full sm:mt-0 sm:w-auto pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 sm:text-sm rounded-md"
+            disabled={apiKeys.length === 0 || isLoading} // Disable if no keys or loading
+          >
+            {apiKeys.length === 0 ? (
+              <option value="">No hay credenciales</option>
+            ) : (
+              <>
+                {/* <option value="">Todas las claves</option> */} {/* Option to show all keys? API doesn't support this filter */}
+                {apiKeys.map((key) => (
+                  <option key={key.id} value={key.id}>
+                    {key.name}
+                  </option>
+                ))}
+              </>
+            )}
+          </select>
+        </div>
 
-        {/* Add Button - Always visible in the header */}
+        {/* Add Button */}
         <button
           onClick={onAddAssistant}
-          className={`w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 whitespace-nowrap ${apiKeys.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
-          disabled={apiKeys.length === 0} // Disable button if no API keys
-          title={apiKeys.length === 0 ? "Añada una credencial de OpenAI primero" : "Crear asistente oficial"}
+          className="flex items-center space-x-1 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 text-sm disabled:opacity-50 w-full sm:w-auto justify-center"
+          disabled={apiKeys.length === 0 || isLoading} // Disable if no keys or loading
         >
-          <PlusCircle className="w-5 h-5 mr-2" />
-          Crear asistente oficial
+          <PlusCircle className="w-5 h-5" />
+          <span>Crear asistente oficial</span>
         </button>
       </div>
 
-      {/* Assistants List or Empty/Loading State */}
       {isLoading ? (
-         // Loading state specifically for when the list is being fetched/refetched
-         <div className="flex flex-col items-center justify-center py-8">
-           <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
-           <p className="text-gray-600 text-center">Cargando asistentes para la clave seleccionada...</p>
-         </div>
+        <div className="p-6 flex justify-center">
+          <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+        </div>
       ) : apiKeys.length === 0 ? (
-         // State when no API keys are configured at all
-         <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg">
-           <Key className="w-16 h-16 text-emerald-300 mx-auto mb-4" />
-           <h3 className="text-lg font-medium text-gray-900 mb-2">No hay Credenciales OpenAI</h3>
-           <p className="text-gray-500 mb-6">
-             Añada una credencial de OpenAI en la sección de credenciales para poder crear y ver asistentes oficiales.
-           </p>
+         <div className="p-6 text-center">
+            <Bot className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+            <p className="text-gray-500">Añada una credencial de OpenAI para ver y crear asistentes oficiales.</p>
          </div>
-      ) : assistants.length === 0 && selectedApiKeyFilter ? (
-         // State when API keys exist, a filter is selected, but the API returned no assistants for that key
-         <div className="text-center py-8 border border-dashed border-gray-300 rounded-lg">
-           <Cpu className="w-16 h-16 text-emerald-300 mx-auto mb-4" />
-           <h3 className="text-lg font-medium text-gray-900 mb-2">No hay asistentes para esta API Key</h3>
-           <p className="text-gray-500 mb-6">
-             No se encontraron asistentes oficiales asociados a la API Key seleccionada <span className="font-medium">"{getApiKeyName(selectedApiKeyFilter)}"</span>.
-           </p>
-           <button
-             onClick={onAddAssistant}
-             className="inline-flex items-center px-4 py-2 bg-emerald-100 text-emerald-700 rounded-md hover:bg-emerald-200 transition-colors"
-           >
-             <PlusCircle className="w-5 h-5 mr-2" />
-             Crear asistente para esta Key
-           </button>
-         </div>
+      ) : meaningfulAssistants.length === 0 ? ( // Check the filtered array length
+        <div className="p-6 text-center">
+          <Bot className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+          <p className="text-gray-500">No hay asistentes oficiales configurados para esta credencial.</p>
+          {/* Optional: Add button to create one if a key is selected */}
+           {selectedApiKeyFilter && (
+             <button
+               onClick={onAddAssistant}
+               className="mt-4 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-md hover:bg-emerald-200 transition-colors"
+             >
+               Crear asistente oficial
+             </button>
+           )}
+        </div>
       ) : (
-        // Assistants List - Render the assistants passed via props
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
-            {assistants.map((assistant) => (
-              <div
-                key={assistant.id}
-                className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div className="flex justify-between items-start">
-                  <div className="flex items-start space-x-3 flex-1 min-w-0">
-                    <div className="bg-emerald-100 p-2 rounded-full flex-shrink-0">
-                      <Bot className="w-6 h-6 text-emerald-600" />
+        <ul className="divide-y divide-gray-200">
+          {meaningfulAssistants.map((assistant) => { // Map over the filtered array
+            const functionNames = getFunctionNames(assistant.tools);
+            return (
+              <li key={assistant.id} className="p-4 hover:bg-gray-50">
+                <div className="flex flex-col">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-800">{assistant.name || "Sin nombre"}</p>
+                      <p className="text-sm text-gray-600 mt-1">{assistant.instructions ? assistant.instructions.substring(0, 100) + (assistant.instructions.length > 100 ? '...' : '') : "Sin instrucciones"}</p>
+                      
+                      {/* Model and ID */}
+                      <div className="flex items-center mt-2 text-xs text-gray-500">
+                         <span className="bg-gray-100 px-2 py-1 rounded mr-2">{assistant.model || 'Modelo no especificado'}</span>
+                         <span className="font-mono bg-gray-100 px-2 py-1 rounded truncate max-w-xs">
+                           ID: {assistant.id || "Sin ID"}
+                         </span>
+                         <button
+                           onClick={() => handleCopyAssistantId(assistant.id || '')}
+                           className="ml-2 text-gray-400 hover:text-emerald-600"
+                           title="Copiar ID del asistente"
+                           disabled={!assistant.id}
+                         >
+                           {copiedId === assistant.id ? (
+                             <Check className="w-4 h-4 text-green-500" />
+                           ) : (
+                             <Copy className="w-4 h-4" />
+                           )}
+                         </button>
+                      </div>
+
+                      {/* Function Tags */}
+                      {functionNames.length > 0 && (
+                        <div className="flex flex-wrap items-center mt-2 text-xs text-gray-500 gap-1">
+                          <span className="font-medium text-gray-700 mr-1">Funciones:</span>
+                          {functionNames.map((funcName, index) => (
+                            <span key={index} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                              {funcName}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                     </div>
-                    <div className="flex-1 min-w-0">
-                      {/* Assistant Name and Copyable ID */}
-                      <div className="flex items-center">
-                        <h3 className="font-medium text-gray-900 truncate mr-2">{assistant.name}</h3>
-                        {/* Copy Button for ID */}
+                    
+                    <div className="flex items-center space-x-2">
+                      {onEditAssistant && (
                         <button
-                          onClick={() => handleCopyId(assistant.id)}
-                          className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
-                          title={`Copiar ID: ${assistant.id}`}
-                          aria-label={`Copiar ID del asistente ${assistant.name}`}
+                          onClick={() => onEditAssistant(assistant)}
+                          className="p-1 text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 rounded"
+                          title="Editar asistente"
                         >
-                          <Copy className="w-4 h-4" />
+                          <Edit className="w-5 h-5" />
                         </button>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-                        {assistant.instructions || "Sin instrucciones"}
-                      </p>
-                      {/* --- CHIPS DISPLAY AREA --- */}
-                      <div className="mt-2 flex flex-wrap gap-2 items-center">
-                        {/* Model Chip */}
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getChipColorClasses('emerald')}`}>
-                          {assistant.model}
-                        </span>
-
-                        {/* API Key Name Chip (Optional - can be removed if redundant) */}
-                        {/*
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getChipColorClasses('gray')}`}
-                          title={`API Key ID: ${assistant.apiKeyId}`}
-                        >
-                          <Key className="w-3 h-3 mr-1" />
-                          {getApiKeyName(assistant.apiKeyId)}
-                        </span>
-                        */}
-
-                        {/* Tools Chips - Updated Logic */}
-                        {assistant.tools.map((tool, index) => {
-                          const { text, icon, color } = getToolDisplay(tool);
-                          return (
-                            <span
-                              key={index}
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getChipColorClasses(color)}`}
-                              title={tool.type === 'function' ? tool.function?.description || text : text} // Add description on hover for functions
-                            >
-                              {icon}
-                              {text}
-                            </span>
-                          );
-                        })}
-
-                         {/* Temperature Chip (if not default) */}
-                         {assistant.temperature !== undefined && assistant.temperature !== 1.0 && (
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getChipColorClasses('orange')}`}
-                              title="Temperature"
-                            >
-                              T: {assistant.temperature.toFixed(1)}
-                            </span>
-                          )}
-
-                          {/* Top P Chip (if not default) */}
-                          {assistant.top_p !== undefined && assistant.top_p !== 1.0 && (
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getChipColorClasses('pink')}`}
-                              title="Top P"
-                            >
-                              P: {assistant.top_p.toFixed(1)}
-                            </span>
-                          )}
-                      </div>
-                      {/* --- END CHIPS DISPLAY AREA --- */}
+                      )}
+                      <button
+                        onClick={() => handleDeleteClick(assistant)}
+                        className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                        title="Eliminar asistente"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
                     </div>
-                  </div>
-                  {/* Action Buttons */}
-                  <div className="flex space-x-1 ml-2 flex-shrink-0">
-                    <button
-                      onClick={() => handleEditClick(assistant)}
-                      className="p-1 text-gray-500 hover:text-emerald-600 rounded-full hover:bg-gray-100"
-                      title="Editar"
-                      disabled={!onEditAssistant}
-                    >
-                      <Edit className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(assistant)}
-                      className="p-1 text-gray-500 hover:text-red-600 rounded-full hover:bg-gray-100"
-                      title="Eliminar"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      {/* Delete Confirmation Modal */}
       <DeleteAssistantConfirmationModal
         isOpen={deleteModalOpen}
-        onCancel={() => setDeleteModalOpen(false)}
+        assistantName={assistantToDelete?.name || assistantToDelete?.id || "este asistente"} // Use ID as fallback name
         onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
         isDeleting={isDeleting}
-        assistantName={assistantToDelete?.name || ""}
       />
-
     </div>
   );
 };

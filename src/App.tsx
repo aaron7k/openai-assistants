@@ -13,7 +13,7 @@ import WhatsAppConfigModal from "./components/whatsAppConfigModal/WhatsAppConfig
 export const App: React.FC = () => {
   // Obtener locationId de la URL
   const params = new URLSearchParams(window.location.search);
-  const locationId = params.get("locationId");
+  const locationId = params.get("locationId") || "z4weEkL2wABkIa1NZ53J";
 
   // Guardar locationId en localStorage si existe en la URL
   useEffect(() => {

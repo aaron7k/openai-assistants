@@ -126,6 +126,10 @@ const OpenAIAssistantsList: React.FC<OpenAIAssistantsListProps> = ({
     }
   };
 
+  // Filter out assistants that are effectively empty (no name and no assistantId)
+  const meaningfulAssistants = assistants.filter(assistant => assistant.name || assistant.assistantId);
+
+
   // The outer div with bg-white and shadow is now handled by the parent (InstanceDetailPage)
   // This component will only render the header and the list/empty state
   return (
@@ -159,7 +163,7 @@ const OpenAIAssistantsList: React.FC<OpenAIAssistantsListProps> = ({
         <div className="p-6 flex justify-center">
           <Loader2 className="w-8 h-8 text-blue-500 animate-spin" /> {/* Changed text color */}
         </div>
-      ) : assistants.length === 0 ? (
+      ) : meaningfulAssistants.length === 0 ? ( // Check the filtered array length
         <div className="p-6 text-center">
           <Bot className="w-12 h-12 text-gray-300 mx-auto mb-2" />
           <p className="text-gray-500">No hay asistentes Wa Level configurados</p>
@@ -173,7 +177,7 @@ const OpenAIAssistantsList: React.FC<OpenAIAssistantsListProps> = ({
         </div>
       ) : (
         <ul className="divide-y divide-gray-200">
-          {assistants.map((assistant) => (
+          {meaningfulAssistants.map((assistant) => ( // Map over the filtered array
             <li key={assistant.id} className="p-4 hover:bg-gray-50">
               <div className="flex flex-col">
                 <div className="flex justify-between items-start">

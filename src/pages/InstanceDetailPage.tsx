@@ -547,7 +547,9 @@ const InstanceDetailPage: React.FC = () => {
       // Refetch official assistants for the currently selected key
       if (selectedOfficialApiKeyId) {
         setIsLoadingOfficialAssistants(true);
-        const updatedAssistants = await api.getOpenAIAssistants(instanceName, selectedOfficialApiKeyId);
+        // NOTE: This was calling getOpenAIAssistants instead of getOpenAIOfficialAssistants
+        // Correcting to call the function for official assistants
+        const updatedAssistants = await api.getOpenAIOfficialAssistants(instanceName, selectedOfficialApiKeyId);
         setOfficialAssistants(updatedAssistants);
         setIsLoadingOfficialAssistants(false);
       }
@@ -647,7 +649,7 @@ const InstanceDetailPage: React.FC = () => {
               </h1>
               {/* Use instanceData?.number first, fallback to parsing ownerJid */}
               <p className="text-sm text-gray-500">
-                {instanceData?.number || instanceData?.ownerJid?.split("@")[0] || "Número no disponible"}
+                {instanceData?.number || (instanceData?.ownerJid ? instanceData.ownerJid.split("@")[0] : "Número no disponible")}
               </p>
               <div className="flex items-center mt-1">
                 {renderStatusIcon()}
