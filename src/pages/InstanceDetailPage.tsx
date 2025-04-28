@@ -261,33 +261,67 @@ const InstanceDetailPage: React.FC = () => {
   // --- Action Handlers ---
 
   const handleRefreshQR = async () => {
-    if (!instanceName || !locationId) return; // Check locationId
+    if (!instanceName || !locationId) {
+      console.error("[InstanceDetail] handleRefreshQR: Missing instanceName or locationId.");
+      toast.error("Faltan parámetros para actualizar el QR.");
+      return; // Check locationId
+    }
     setIsRefreshingQR(true);
     try {
       const data = await api.refreshQRCode(locationId, instanceName); // Use locationId here
-      if (data && data.qrcode) {
-        setInstanceData((prev: any) => ({ ...prev, qrcode: data.qrcode, state: 'connecting' })); // Assume connecting state
-        setIsQRModalOpen(true); // Open modal with new QR
-        toast.success("Código QR actualizado. Escanéalo con tu WhatsApp.");
-      } else if (data && data.state) {
-         setInstanceData((prev: any) => ({ ...prev, state: data.state }));
-         if (data.state === 'open') {
+      console.log("[InstanceDetail] refreshQRCode response:", data); // Log response
+      if (data) {
+        // Always update instanceData with the latest state and qrcode from the response
+        setInstanceData((prev: any) => ({
+          ...prev,
+          qrcode: data.qrcode || prev?.qrcode, // Update qrcode if present
+          state: data.state || prev?.state, // Update state if present
+          number: data.number || prev?.number, // Update number if present
+          profilePicUrl: data.profilePicUrl || prev?.profilePicUrl // Update profile pic if present
+        }));
+
+        if (data.state === 'open') {
            toast.success("La instancia ya está conectada.");
            setIsQRModalOpen(false); // Close QR modal if already open
-         } else {
-           // Handle other states if necessary
-           toast.info(`Estado de la instancia: ${data.state}`);
-         }
-      } else if (data && data.error) {
-         toast.error(data.error);
+        } else if (data.qrcode) {
+           setIsQRModalOpen(true); // Open modal with new QR if QR is received
+           toast.success("Código QR actualizado. Escanéalo con tu WhatsApp.");
+        } else if (data.state === 'connecting') {
+           // If state is connecting but no QR, maybe it's still trying to connect
+           toast.info("Instancia en estado de conexión. Esperando...");
+           setIsQRModalOpen(false); // Close QR modal if no QR to show
+        } else if (data.state === 'close') {
+           toast.info("Instancia desconectada. Genere un nuevo QR.");
+           setIsQRModalOpen(false); // Close QR modal if no QR to show
+        } else if (data.error) {
+           toast.error(data.error);
+           setIsQRModalOpen(false); // Close QR modal on error
+        } else {
+           // Handle other states or unexpected responses
+           toast.info(`Estado de la instancia: ${data.state || 'desconocido'}`);
+           setIsQRModalOpen(false); // Close QR modal if no QR to show
+        }
+      } else {
+         toast.error("Respuesta inesperada al actualizar QR.");
+         setIsQRModalOpen(false);
       }
     } catch (error) {
       // Error toast handled by API function
       console.error("Error refreshing QR code:", error);
+      setIsQRModalOpen(false); // Close modal on error
     } finally {
       setIsRefreshingQR(false);
     }
   };
+
+  // Callback function to be passed to QRCodeModal to update state when it detects connection
+  const handleQRCodeModalConnectionSuccess = useCallback(() => {
+    console.log("[InstanceDetail] QRCodeModal reported successful connection. Refetching data...");
+    // Refetch all data to get the latest state, number, profile pic, etc.
+    fetchData();
+    setIsQRModalOpen(false); // Ensure modal is closed
+  }, [fetchData]);
+
 
   const handleDeleteInstance = async () => {
     if (!instanceName || !locationId) return; // Check locationId
@@ -310,8 +344,11 @@ const InstanceDetailPage: React.FC = () => {
     setIsTurningOff(true);
     try {
       await api.turnOffInstance(locationId, instanceName); // Use locationId here
-      setInstanceData((prev: any) => ({ ...prev, state: "close" })); // Update state locally
+      // Update state locally immediately, then refetch for confirmation
+      setInstanceData((prev: any) => ({ ...prev, state: "close" }));
       toast.success("Instancia desconectada.");
+      // Optional: Refetch data after a short delay to confirm state
+      // setTimeout(fetchData, 2000);
     } catch (error) {
       // Error toast handled by API function
       console.error("Error turning off instance:", error);
@@ -797,13 +834,20 @@ const InstanceDetailPage: React.FC = () => {
         onCancel={() => setIsDeleteModalOpen(false)}
         isDeleting={isDeleting}
       />
+      {/* Pass locationId correctly to QRCodeModal */}
       <QRCodeModal
         isOpen={isQRModalOpen}
         onClose={() => setIsQRModalOpen(false)}
         qrCode={instanceData?.qrcode || ""}
-        instanceName={instance?.instance_alias || instanceName || ""}
+        instanceName={instanceName || ""} // Use instanceName from params
+        locationId={locationId || undefined} // Pass locationId from state/localStorage
+        userId={instanceData?.userId || undefined} // Pass userId from instanceData if available
+        userName={instance?.instance_alias || instanceName || ""} // Use alias or name for display
         onRefresh={handleRefreshQR} // Allow refresh from QR modal
         isRefreshing={isRefreshingQR}
+        onQRCodeUpdated={(qrcode) => setInstanceData((prev: any) => ({ ...prev, qrcode }))} // Update QR in state if modal gets a new one
+        // Pass the callback to update state when connection is detected in modal
+        onConnectionSuccess={handleQRCodeModalConnectionSuccess}
       />
       <UserModal
         isOpen={isUserModalOpen}
